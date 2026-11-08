@@ -1,0 +1,27 @@
+name = "blvm-index"
+version = "0.1.0"
+description = "Script history, Electrum, and Esplora. Replaces blvm-wallet-index without changing the database."
+author = "Bitcoin Commons Contributors"
+entry_point = "blvm-index"
+min_node_version = "0.1.*"
+
+capabilities = [
+    "read_blockchain",
+    "read_utxo",
+    "read_chain_state",
+    "read_mempool",
+    "subscribe_events",
+    "read_storage",
+    "write_storage",
+    "host_service",
+]
+
+replaces = ["blvm-wallet-index"]
+
+[[services]]
+name = "esplora"
+kind = "http"
+
+[[services]]
+name = "electrum"
+kind = "stream"
