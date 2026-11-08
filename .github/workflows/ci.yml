@@ -125,12 +125,18 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             runs_on: [self-hosted, Linux, X64, builds]
+            artifact_name: blvm-index-x86_64-linux
+            binary_suffix: ""
             use_cross: false
           - target: aarch64-unknown-linux-gnu
             runs_on: [self-hosted, Linux, X64, builds]
+            artifact_name: blvm-index-aarch64-linux
+            binary_suffix: ""
             use_cross: true
           - target: x86_64-pc-windows-msvc
             runs_on: windows-2022
+            artifact_name: blvm-index-x86_64-windows.exe
+            binary_suffix: ".exe"
             use_cross: false
 
     steps:
@@ -200,6 +206,28 @@ jobs:
         shell: pwsh
         run: cargo build --release --target ${{ matrix.target }}
 
+      - name: Compute sha256
+        shell: bash
+        run: |
+          BINARY="target/${{ matrix.target }}/release/blvm-index${{ matrix.binary_suffix }}"
+          cp "$BINARY" "${{ matrix.artifact_name }}"
+          if command -v sha256sum &>/dev/null; then
+            SHA=$(sha256sum "${{ matrix.artifact_name }}" | awk '{print $1}')
+          elif command -v shasum &>/dev/null; then
+            SHA=$(shasum -a 256 "${{ matrix.artifact_name }}" | awk '{print $1}')
+          else
+            SHA=$(certutil -hashfile "${{ matrix.artifact_name }}" SHA256 | sed -n '2p' | tr -d ' \r')
+          fi
+          echo "$SHA  ${{ matrix.artifact_name }}" >> sha256sums.txt
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            ${{ matrix.artifact_name }}
+            sha256sums.txt
+
       - name: Save Cargo cache (Linux self-hosted)
         if: always() && runner.os == 'Linux'
         uses: BTCDecoded/rust-ci/runner-cargo-cache@main
@@ -211,6 +239,105 @@ jobs:
         uses: BTCDecoded/rust-ci/runner-cargo-cache@main
         with:
           operation: prune
+
+  github-release:
+    name: GitHub Release
+    needs: [quality, build]
+    runs-on: [self-hosted, Linux, X64, builds]
+    permissions:
+      contents: write
+    if: |
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name != 'push' || github.event.head_commit == null ||
+       (!contains(github.event.head_commit.message, '[skip ci]') &&
+        !contains(github.event.head_commit.message, '[ci skip]') &&
+        !contains(github.event.head_commit.message, '[no ci]') &&
+        !contains(github.event.head_commit.message, '[skip publish]')))
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_tag: ${{ steps.version.outputs.version_tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          CURRENT=$(grep -A 10 '^\[package\]' Cargo.toml | grep '^version = ' | head -1 | sed -E 's/^version = "([^"]+)".*/\1/')
+          if [ -z "$CURRENT" ]; then
+            echo "Could not read version from [package] in Cargo.toml"
+            exit 1
+          fi
+          if ! echo "$CURRENT" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Invalid version format: ${CURRENT} (expected X.Y.Z)"
+            exit 1
+          fi
+          MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+          MINOR=$(echo "$CURRENT" | cut -d. -f2)
+          CURRENT_PATCH=$(echo "$CURRENT" | cut -d. -f3)
+          CRATE_NAME=$(grep -A 5 '^\[package\]' Cargo.toml | grep '^name = ' | head -1 | sed -E 's/^name = "([^"]+)".*/\1/')
+          API_RESPONSE=$(curl -sf \
+            -H "User-Agent: blvm-ci/1.0 (github.com/BTCDecoded)" \
+            "https://crates.io/api/v1/crates/${CRATE_NAME}/versions" 2>/dev/null || echo "")
+          PUBLISHED_VERSIONS=""
+          if [ -n "$API_RESPONSE" ] && ! echo "$API_RESPONSE" | grep -q '"detail"'; then
+            if command -v jq &>/dev/null; then
+              PUBLISHED_VERSIONS=$(echo "$API_RESPONSE" | jq -r '.versions[].num' 2>/dev/null || echo "")
+            else
+              PUBLISHED_VERSIONS=$(echo "$API_RESPONSE" | grep -oE '"num":"[^"]+"' | sed 's/"num":"//;s/"//')
+            fi
+          fi
+          TAGGED_VERSIONS=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sed 's/^v//' | sed 's/-unverified$//')
+          USED_VERSIONS=$(printf '%s\n%s' "$TAGGED_VERSIONS" "$PUBLISHED_VERSIONS" | sort -u | grep -v '^$' || true)
+          SAME_LINE_PATCHES=$(printf '%s\n' "$USED_VERSIONS" | grep -E "^${MAJOR}\\.${MINOR}\\.[0-9]+$" | cut -d. -f3 || true)
+          MAX_PATCH=$(printf '%s\n' $SAME_LINE_PATCHES "$CURRENT_PATCH" | grep -E '^[0-9]+$' | sort -n | tail -1)
+          [ -n "$MAX_PATCH" ] || MAX_PATCH="$CURRENT_PATCH"
+          PATCH=$((MAX_PATCH + 1))
+          VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          while echo "$USED_VERSIONS" | grep -qxF "$VERSION"; do
+            PATCH=$((PATCH + 1))
+            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          done
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version_tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "GitHub release v${VERSION}"
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: artifacts/
+
+      - name: Combine sha256sums
+        run: |
+          find artifacts -name sha256sums.txt -print0 | xargs -0 cat | sort -u > sha256sums.txt
+          for f in blvm-index-x86_64-linux blvm-index-aarch64-linux blvm-index-x86_64-windows.exe; do
+            test -f "artifacts/$f/$f" || { echo "missing release binary $f"; exit 1; }
+          done
+          cat sha256sums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@26994186c0ac3ef5cae75ac16aa32e8153525f77
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ steps.version.outputs.version_tag }}
+          name: blvm-index ${{ steps.version.outputs.version_tag }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          fail_on_unmatched_files: true
+          body: |
+            ## blvm-index ${{ steps.version.outputs.version_tag }}
+
+            Platform binaries and `sha256sums.txt` for node bootstrap.
+          files: |
+            artifacts/blvm-index-x86_64-linux/blvm-index-x86_64-linux
+            artifacts/blvm-index-aarch64-linux/blvm-index-aarch64-linux
+            artifacts/blvm-index-x86_64-windows.exe/blvm-index-x86_64-windows.exe
+            sha256sums.txt
+          draft: false
+          prerelease: false
+
 
   publish:
     name: Release & publish
