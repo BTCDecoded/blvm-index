@@ -2,8 +2,8 @@
 
 use anyhow::Result;
 use blvm_index::{
-    electrum_reply, esplora_response, legacy_bind_requested, FEE_ESTIMATE_TARGETS,
-    LEGACY_BIND_MESSAGE,
+    FEE_ESTIMATE_TARGETS, LEGACY_BIND_MESSAGE, electrum_reply, esplora_response,
+    legacy_bind_requested,
 };
 use blvm_node::module::ipc::protocol::{
     CliSpec, InvocationResultMessage, InvocationResultPayload, InvocationType,
@@ -11,7 +11,7 @@ use blvm_node::module::ipc::protocol::{
 use blvm_node::module::traits::{EventType, ModuleError, NodeAPI};
 use blvm_sdk::module::runner::run_module_with_setup;
 use blvm_sdk::module::{ModuleBootstrap, ModuleDb};
-use blvm_wallet_index::{HeaderHub, StatusHub, WalletIndexConfig, WalletIndexModule, TREE_NAME};
+use blvm_wallet_index::{HeaderHub, StatusHub, TREE_NAME, WalletIndexConfig, WalletIndexModule};
 use std::sync::{Arc, RwLock};
 use tracing::warn;
 

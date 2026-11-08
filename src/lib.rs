@@ -17,8 +17,12 @@ pub const LEGACY_BIND_MESSAGE: &str = "blvm-wallet-index listen and esplora move
 
 /// The old module keys are set. Log [`LEGACY_BIND_MESSAGE`] and do not bind.
 pub fn legacy_bind_requested(listen: &Option<String>, esplora: &Option<String>) -> bool {
-    listen.as_ref().is_some_and(|value| !value.trim().is_empty())
-        || esplora.as_ref().is_some_and(|value| !value.trim().is_empty())
+    listen
+        .as_ref()
+        .is_some_and(|value| !value.trim().is_empty())
+        || esplora
+            .as_ref()
+            .is_some_and(|value| !value.trim().is_empty())
 }
 
 /// Esplora `GET /fee-estimates`: target keys to sat/vB. `sat/kvB / 1000`.
@@ -35,7 +39,11 @@ pub fn fee_estimates_body(quotes: &[(u32, u64)]) -> String {
 }
 
 /// Status, content type, and body. `quotes` are conservative combined sat/kvB.
-pub fn esplora_response(tree: &dyn Tree, path_and_query: &str, quotes: &[(u32, u64)]) -> (u16, &'static str, Vec<u8>) {
+pub fn esplora_response(
+    tree: &dyn Tree,
+    path_and_query: &str,
+    quotes: &[(u32, u64)],
+) -> (u16, &'static str, Vec<u8>) {
     let path = path_and_query.split('?').next().unwrap_or(path_and_query);
     let path = path
         .strip_prefix("/api")
@@ -87,8 +95,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use blvm_node::module::services::{
-        BindRequest, HostedModule, ServiceHost, ServiceHttpRequest, ServiceHttpResponse,
-        ServiceKind, StreamEvent, DEFAULT_MAX_CONNECTIONS,
+        BindRequest, DEFAULT_MAX_CONNECTIONS, HostedModule, ServiceHost, ServiceHttpRequest,
+        ServiceHttpResponse, ServiceKind, StreamEvent,
     };
     use blvm_protocol::block::calculate_tx_id;
     use blvm_protocol::{
@@ -179,7 +187,10 @@ mod tests {
         let rows = history(tree.as_ref(), &script).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].txid, txid);
-        assert!(legacy_bind_requested(&Some("127.0.0.1:50001".into()), &None));
+        assert!(legacy_bind_requested(
+            &Some("127.0.0.1:50001".into()),
+            &None
+        ));
         assert!(!legacy_bind_requested(&None, &Some("  ".into())));
     }
 
@@ -297,7 +308,8 @@ mod tests {
 
     async fn http_get(addr: std::net::SocketAddr, path: &str) -> String {
         let mut stream = TcpStream::connect(addr).await.unwrap();
-        let request = format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+        let request =
+            format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
         stream.write_all(request.as_bytes()).await.unwrap();
         let mut body = Vec::new();
         stream.read_to_end(&mut body).await.unwrap();
