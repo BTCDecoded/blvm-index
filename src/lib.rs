@@ -1,19 +1,29 @@
-//! Script history from `blvm-wallet-index`, served through node-hosted listeners.
+//! Script history, served through node-hosted listeners.
 //!
-//! The database tree and rollback stay in `blvm-wallet-index`. This crate adds the
-//! Esplora paths that crate does not serve, and the `/api` prefix.
+//! The database tree and rollback live in this crate. Esplora adds `/fee-estimates`
+//! and the `/api` prefix on top of the history paths.
+
+mod config;
+mod electrum;
+mod esplora;
+mod index;
+mod module;
 
 use blvm_node::storage::database::Tree;
 use blvm_node::storage::hashing::{double_sha256, hash_to_rpc_hex};
-use blvm_wallet_index::{header_tip, reply_line};
 use serde_json::{Map, Value};
+
+pub use config::WalletIndexConfig;
+pub use electrum::{HeaderHub, StatusHub, reply_line};
+pub use index::{TREE_NAME, header_tip, history, index_block};
+pub use module::WalletIndexModule;
 
 /// `FeeEstimatorConfig::default` `lnd_targets` in `blvm-node/src/config/fees.rs`.
 /// `GetFeeTable` is asked for these targets. A missing quote is omitted.
 pub const FEE_ESTIMATE_TARGETS: &[u32] = &[1, 2, 3, 6, 12, 24, 48, 144, 504, 1008];
 
-pub const LEGACY_BIND_MESSAGE: &str = "blvm-wallet-index listen and esplora moved to \
-[services.electrum] and [services.esplora]; blvm-index does not bind those sockets";
+pub const LEGACY_BIND_MESSAGE: &str = "module listen and esplora are ignored; \
+[services.electrum] and [services.esplora] bind those sockets";
 
 /// The old module keys are set. Log [`LEGACY_BIND_MESSAGE`] and do not bind.
 pub fn legacy_bind_requested(listen: &Option<String>, esplora: &Option<String>) -> bool {
@@ -68,7 +78,7 @@ pub fn esplora_response(
         };
     }
     let request = format!("GET {path} HTTP/1.1");
-    let (status, content_type, body) = blvm_wallet_index::esplora_response(tree, &request);
+    let (status, content_type, body) = esplora::response(tree, &request);
     (status, content_type, body.into_bytes())
 }
 
@@ -93,6 +103,7 @@ pub fn electrum_reply(tree: &dyn Tree, bytes: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{TREE_NAME, history, index_block};
     use async_trait::async_trait;
     use blvm_node::module::services::{
         BindRequest, DEFAULT_MAX_CONNECTIONS, HostedModule, ServiceHost, ServiceHttpRequest,
@@ -103,7 +114,6 @@ mod tests {
         Block, BlockHeader, OutPoint, Transaction, TransactionInput, TransactionOutput,
     };
     use blvm_sdk::module::ModuleDb;
-    use blvm_wallet_index::{TREE_NAME, history, index_block};
     use std::sync::Arc;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpStream;
@@ -167,9 +177,9 @@ mod tests {
     }
 
     #[test]
-    fn a_renamed_wallet_index_directory_still_has_its_rows() {
+    fn stored_rows_survive_reopening_the_module_database() {
         let root = tempfile::tempdir().unwrap();
-        let old = root.path().join("blvm-wallet-index");
+        let old = root.path().join("blvm-index");
         std::fs::create_dir_all(&old).unwrap();
         let script = blvm_node::rpc::rawtx::address_string_to_script_pubkey(ADDRESS).unwrap();
         let tx = coinbase(&script);
@@ -180,9 +190,7 @@ mod tests {
             index_block(tree.as_ref(), &block_at(tx, 4), 4).unwrap();
             assert_eq!(history(tree.as_ref(), &script).unwrap().len(), 1);
         }
-        let renamed = root.path().join("blvm-index");
-        std::fs::rename(&old, &renamed).unwrap();
-        let db = ModuleDb::open(&renamed).unwrap();
+        let db = ModuleDb::open(&old).unwrap();
         let tree = db.tree(TREE_NAME).unwrap();
         let rows = history(tree.as_ref(), &script).unwrap();
         assert_eq!(rows.len(), 1);

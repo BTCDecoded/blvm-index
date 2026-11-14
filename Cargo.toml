@@ -4,7 +4,7 @@ version = "0.1.2"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Bitcoin Commons Contributors"]
-description = "Script history index. Replaces blvm-wallet-index and serves Electrum and Esplora through the node."
+description = "Script history index. Serves Electrum and Esplora through the node."
 license = "MIT"
 repository = "https://github.com/BTCDecoded/blvm-index"
 homepage = "https://btcdecoded.org"
@@ -20,24 +20,28 @@ name = "blvm_index"
 path = "src/lib.rs"
 
 [dependencies]
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 anyhow = "1.0"
+hex = "=0.4.3"
+sha2 = "=0.10.9"
+toml = "=0.8.2"
 tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "sync", "net", "io-util", "time"] }
 tracing = "0.1"
-blvm-wallet-index = { version = ">=0.1, <1" }
-blvm-node = { version = ">=0.1, <1" }
+blvm-node = { version = ">=0.1, <1", features = ["sled"] }
+blvm-protocol = { version = ">=0.1, <1" }
 blvm-sdk = { version = ">=0.1, <1", default-features = false, features = ["node"] }
+blvm-sdk-macros = { version = ">=0.1, <1" }
 
 [dev-dependencies]
-blvm-protocol = { version = ">=0.1, <1" }
 async-trait = "0.1"
+blvm-consensus = { version = ">=0.1, <1" }
 tempfile = "=3.8.1"
 tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "net", "io-util", "time"] }
 
 # Local monorepo: sibling paths override the version pins above.
 # Strip this section (BTCDecoded/rust-ci/strip-patch-crates-io@main) before publishing.
 [patch.crates-io]
-blvm-wallet-index = { path = "../blvm-wallet-index" }
 quinn-proto = { git = "https://github.com/quinn-rs/quinn", tag = "quinn-proto-0.11.15" }
 blvm-node = { path = "../blvm-node" }
 blvm-sdk = { path = "../blvm-sdk" }

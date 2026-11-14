@@ -1,6 +1,6 @@
 # blvm-index
 
-Script history, Electrum, and Esplora. This module replaces `blvm-wallet-index` and keeps that database format.
+Script history, Electrum, and Esplora. The database format is unchanged.
 
 The node binds the listeners. This process does not. Electrum is `[services.electrum]` and Esplora is `[services.esplora]`. An unset `listen` does not bind.
 

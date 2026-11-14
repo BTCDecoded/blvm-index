@@ -1,6 +1,6 @@
 name = "blvm-index"
 version = "0.1.0"
-description = "Script history, Electrum, and Esplora. Replaces blvm-wallet-index without changing the database."
+description = "Script history, Electrum, and Esplora. The node binds the listeners."
 author = "Bitcoin Commons Contributors"
 entry_point = "blvm-index"
 min_node_version = "0.1.*"
