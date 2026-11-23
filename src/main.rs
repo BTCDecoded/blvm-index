@@ -2,8 +2,8 @@
 
 use anyhow::Result;
 use blvm_index::{
-    FEE_ESTIMATE_TARGETS, HeaderHub, LEGACY_BIND_MESSAGE, StatusHub, TREE_NAME, WalletIndexConfig,
-    WalletIndexModule, electrum_reply, esplora_response, legacy_bind_requested,
+    FEE_ESTIMATE_TARGETS, HeaderHub, StatusHub, TREE_NAME, WalletIndexModule, electrum_reply,
+    esplora_response, reject_retired_binds,
 };
 use blvm_node::module::ipc::protocol::{
     CliSpec, InvocationResultMessage, InvocationResultPayload, InvocationType,
@@ -12,8 +12,6 @@ use blvm_node::module::traits::{EventType, ModuleError, NodeAPI};
 use blvm_sdk::module::runner::run_module_with_setup;
 use blvm_sdk::module::{ModuleBootstrap, ModuleDb};
 use std::sync::{Arc, RwLock};
-use tracing::warn;
-
 const MODULE_NAME: &str = "blvm-index";
 
 async fn refresh(node: &dyn NodeAPI, fees: &RwLock<Vec<(u32, u64)>>) {
@@ -50,10 +48,8 @@ async fn main() -> Result<()> {
             let fees = Arc::clone(&fees);
             let dir = dir.to_path_buf();
             async move {
-                let config = WalletIndexConfig::load(dir.join("config.toml")).unwrap_or_default();
-                if legacy_bind_requested(&config.listen, &config.esplora) {
-                    warn!("{LEGACY_BIND_MESSAGE}");
-                }
+                reject_retired_binds(&dir.join("config.toml"))
+                    .map_err(blvm_node::module::traits::ModuleError::Other)?;
                 let node = Arc::clone(&node_api);
                 let cached = Arc::clone(&fees);
                 tokio::spawn(async move {

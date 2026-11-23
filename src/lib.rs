@@ -13,7 +13,7 @@ use blvm_node::storage::database::Tree;
 use blvm_node::storage::hashing::{double_sha256, hash_to_rpc_hex};
 use serde_json::{Map, Value};
 
-pub use config::WalletIndexConfig;
+pub use config::{WalletIndexConfig, reject_retired_binds};
 pub use electrum::{HeaderHub, StatusHub, reply_line};
 pub use index::{TREE_NAME, header_tip, history, index_block};
 pub use module::WalletIndexModule;
@@ -21,19 +21,6 @@ pub use module::WalletIndexModule;
 /// `FeeEstimatorConfig::default` `lnd_targets` in `blvm-node/src/config/fees.rs`.
 /// `GetFeeTable` is asked for these targets. A missing quote is omitted.
 pub const FEE_ESTIMATE_TARGETS: &[u32] = &[1, 2, 3, 6, 12, 24, 48, 144, 504, 1008];
-
-pub const LEGACY_BIND_MESSAGE: &str = "module listen and esplora are ignored; \
-[services.electrum] and [services.esplora] bind those sockets";
-
-/// The old module keys are set. Log [`LEGACY_BIND_MESSAGE`] and do not bind.
-pub fn legacy_bind_requested(listen: &Option<String>, esplora: &Option<String>) -> bool {
-    listen
-        .as_ref()
-        .is_some_and(|value| !value.trim().is_empty())
-        || esplora
-            .as_ref()
-            .is_some_and(|value| !value.trim().is_empty())
-}
 
 /// Esplora `GET /fee-estimates`: target keys to sat/vB. `sat/kvB / 1000`.
 pub fn fee_estimates_body(quotes: &[(u32, u64)]) -> String {
@@ -195,11 +182,6 @@ mod tests {
         let rows = history(tree.as_ref(), &script).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].txid, txid);
-        assert!(legacy_bind_requested(
-            &Some("127.0.0.1:50001".into()),
-            &None
-        ));
-        assert!(!legacy_bind_requested(&None, &Some("  ".into())));
     }
 
     #[test]
