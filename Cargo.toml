@@ -2,7 +2,7 @@
 name = "blvm-index"
 version = "0.1.2"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.91"
 authors = ["Bitcoin Commons Contributors"]
 description = "Script history index. Serves Electrum and Esplora through the node."
 license = "MIT"

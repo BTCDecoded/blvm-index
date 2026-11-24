@@ -14,7 +14,8 @@ use blvm_node::storage::hashing::{double_sha256, hash_to_rpc_hex};
 use serde_json::{Map, Value};
 
 pub use config::{WalletIndexConfig, reject_retired_binds};
-pub use electrum::{HeaderHub, StatusHub, reply_line};
+pub use electrum::{HeaderHub, StatusHub, reply_line, serve as serve_electrum, serve_listener};
+pub use esplora::serve as serve_esplora;
 pub use index::{TREE_NAME, header_tip, history, index_block};
 pub use module::WalletIndexModule;
 
