@@ -1,6 +1,6 @@
 [package]
 name = "blvm-index"
-version = "0.1.2"
+version = "0.1.4"
 edition = "2024"
 rust-version = "1.91"
 authors = ["Bitcoin Commons Contributors"]
