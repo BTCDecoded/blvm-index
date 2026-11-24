@@ -144,10 +144,10 @@ async fn main() -> Result<()> {
             let module = module.clone();
             let ctx = ctx.clone();
             async move {
-                if event.event_type == EventType::FeeTableReady {
-                    if let Some(node) = ctx.node_api() {
-                        refresh(node.as_ref(), &fees).await;
-                    }
+                if event.event_type == EventType::FeeTableReady
+                    && let Some(node) = ctx.node_api()
+                {
+                    refresh(node.as_ref(), &fees).await;
                 }
                 module.dispatch_event(event, &ctx).await
             }
